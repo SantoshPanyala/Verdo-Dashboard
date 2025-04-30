@@ -2,6 +2,7 @@ const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
 
+
 const app = express();
 
 app.use(cors());
@@ -10,6 +11,9 @@ app.use(morgan('dev'));
 
 const logRoutes = require('./routes/logRoutes');
 app.use('/api/logs', logRoutes);
+
+const authRoutes = require('./routes/authRoutes')
+app.use('/api/auth', authRoutes);
 
 // Test route
 app.get('/', (req, res) => {
