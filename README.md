@@ -1,4 +1,4 @@
-# Verdo Business Dashboard - Midterm API
+# Verdo Business Dashboard - Final API
 
 This project is a RESTful API built using **Node.js**, **Express.js**, and **MongoDB** with **Mongoose**.  
 It is part of my **Web Engineering midterm assignment** and supports basic carbon footprint tracking for businesses.
