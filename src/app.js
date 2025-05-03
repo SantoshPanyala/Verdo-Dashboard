@@ -1,6 +1,7 @@
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
+const errorHandler = require('./middleware/errorMiddleware');
 
 
 const app = express();
@@ -19,6 +20,10 @@ app.use('/api/auth', authRoutes);
 app.get('/', (req, res) => {
     res.json({ message: 'Verda API is running' });
 });
+
+// --- Error Handler Middleware ---
+// IMPORTANT: Must be registered *after* all other routes and middleware
+app.use(errorHandler); // <<< Register error handler
 
 
 module.exports = app;

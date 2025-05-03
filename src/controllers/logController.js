@@ -1,77 +1,173 @@
 // src/controllers/logController.js
 const ActivityLog = require('../models/ActivityLog');
+const mongoose = require('mongoose');
+const { validationResult } = require('express-validator');
 
-// @desc    Create new activity log
-// @route   POST /api/logs
-// @access  Private (Requires login)
-exports.createLog = async (req, res) => {
+// Create a new log entry for the logged-in user
+exports.createLog = async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        const errorMessages = errors.array().map(err => err.msg);
+        return res.status(400).json({
+            success: false,
+            message: errorMessages.join('. ')
+        });
+    }
     try {
-        // --- Get user ID from the authenticated user (added by 'protect' middleware) ---
-        const userId = req.user.id; // <<< Use req.user.id from the token
+        const userId = req.user.id; // ID from authentication token
+        const { category, amount } = req.body;
 
-        // --- Get category and amount from the request body ---
-        const { category, amount } = req.body; // Only these are needed from the body
-
-        // --- Validation: Check if category and amount are provided ---
-        if (!category || amount === undefined || amount === null) { // Check amount existence specifically
-            return res.status(400).json({
-                success: false, // Add success field
-                message: 'Missing required fields: category or amount', // Clearer message
-            });
-        }
-
-        // --- Ensure amount is a valid number ---
-        if (typeof amount !== 'number' || isNaN(amount)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid data type for amount: must be a number.',
-            });
-        }
-
-
-        // --- Create the new log, associating it with the authenticated user ---
+        // Create the log
         const newLog = await ActivityLog.create({
-            user: userId, // <<< Use the ID from the authenticated user
-            category,
-            amount,
-            // 'unit' and 'timestamp' will use defaults from the model
+            user: userId,
+            category, // Validator trimmed it if trim() was used
+            amount: parseFloat(amount) // Use parsed amount
         });
+        res.status(201).json({ success: true, data: newLog, message: 'Log created' });
 
-        // --- Send success response ---
-        res.status(201).json({
-            success: true,
-            data: newLog,
-            message: 'Log created successfully',
-        });
     } catch (error) {
-        console.error('Create Log Error:', error); // Log the error for debugging
-        res.status(500).json({
-            success: false, // Add success field
-            message: 'Server Error creating log',
-            // error: error.message // Optionally include error details in development
-        });
+        console.error('Create Log Error:', error);
+        next(error);
     }
 };
 
-// @desc    Get all activity logs (Admin only)
-// @route   GET /api/logs
-// @access  Private (Admin only)
-exports.getLogs = async (req, res) => {
+// Get all logs (requires admin role)
+exports.getLogs = async (req, res, next) => {
     try {
-        // This route is protected by both 'protect' and 'authorize('admin')'
-        const logs = await ActivityLog.find().sort({ timestamp: -1 }); // Find all logs
+        const logs = await ActivityLog.find().sort({ timestamp: -1 }); // Find all, newest first
 
-        res.status(200).json({
-            success: true,
-            count: logs.length, // Add count for clarity
-            data: logs,
-            message: 'Logs retrieved successfully',
-        });
+        res.status(200).json({ success: true, count: logs.length, data: logs, message: 'Logs retrieved successfully' });
     } catch (error) {
         console.error('Get Logs Error:', error);
-        res.status(500).json({
+        next(error);
+    }
+};
+
+// Get only the logs belonging to the currently logged-in user
+exports.getMyLogs = async (req, res, next) => {
+    try {
+        // Find logs matching current user's ID, newest first
+        const logs = await ActivityLog.find({ user: req.user.id }).sort({ timestamp: -1 });
+
+        res.status(200).json({ success: true, count: logs.length, data: logs, message: 'User logs retrieved successfully' });
+
+
+    } catch (error) {
+        console.error('Get My Logs Error:', error);
+        next(error);
+    }
+};
+
+// Delete a specific activity log
+exports.deleteLog = async (req, res, next) => {
+    // --- Check for validation errors (covers ID format) --- //
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        const errorMessages = errors.array().map(err => err.msg);
+        return res.status(400).json({
             success: false,
-            message: 'Server Error retrieving logs'
+            message: errorMessages.join('. ')
         });
+    }
+
+    try {
+        const logId = req.params.id; // Get log ID from URL parameters
+        const userId = req.user.id; // Get logged-in user's ID from token
+
+        // Check if the logId is a valid MongoDB ObjectId format
+        if (!mongoose.Types.ObjectId.isValid(logId)) {
+            return res.status(400).json({ success: false, message: 'Invalid Log ID format' });
+        }
+
+        // Find the log by its ID
+        const log = await ActivityLog.findById(logId);
+
+        // If log doesn't exist
+        if (!log) {
+            return res.status(404).json({ success: false, message: 'Log not found' });
+        }
+
+        // Check Permissions:
+        // User must either own the log OR be an admin
+        if (log.user.toString() !== userId && req.user.role !== 'admin') {
+            // .toString() is needed to compare ObjectId with string ID from token
+            return res.status(403).json({ success: false, message: 'User not authorized to delete this log' });
+        }
+
+        // Delete the log
+        await ActivityLog.findByIdAndDelete(logId);
+        // Or alternatively, if you already have the log object: await log.deleteOne();
+
+        // Send success response
+        // Status 200 with data:{} or Status 204 No Content are common for successful DELETE
+        res.status(200).json({ success: true, data: {}, message: 'Log deleted successfully' });
+
+    } catch (error) {
+        console.error('Delete Log Error:', error); // Keep console log
+        next(error); // <<< Pass error to the centralized handler
+    }
+};
+
+exports.updateLog = async (req, res) => {
+    // --- Check for validation errors (covers ID format, optional body fields) --- // <<< NEW
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        const errorMessages = errors.array().map(err => err.msg);
+        return res.status(400).json({
+            success: false,
+            message: errorMessages.join('. ')
+        });
+    }
+    // --- End validation check ---
+
+    try {
+        const logId = req.params.id;
+        const userId = req.user.id;
+        const { category, amount } = req.body;
+
+        // --- Old manual ID check NO LONGER NEEDED ---
+        // if (!mongoose.Types.ObjectId.isValid(logId)) { ... }
+
+        // Find the log first to check ownership
+        const log = await ActivityLog.findById(logId);
+        if (!log) {
+            return res.status(404).json({ success: false, message: 'Log not found' });
+        }
+
+        // Check Permissions
+        if (log.user.toString() !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'User not authorized to update this log' });
+        }
+
+        // Prepare update data - validator ensures type/format if fields exist
+        const updateData = {};
+        if (category !== undefined) updateData.category = category.trim(); // Use trimmed if validator used trim()
+        if (amount !== undefined) updateData.amount = parseFloat(amount); // Use parsed amount
+
+        // Check if *any* valid fields were provided for update
+        // This check might still be useful if ONLY invalid fields were sent
+        // although the .optional() validators handle empty requests better.
+        if (Object.keys(updateData).length === 0 && (category === undefined && amount === undefined)) {
+            return res.status(400).json({ success: false, message: 'No valid fields provided for update (category or amount required)' });
+        }
+        // --- Remove old manual type checks ---
+        // if (category !== undefined && (typeof category !== 'string' || category.trim() === '')) { ... }
+        // if (amount !== undefined && (typeof amount !== 'number' || isNaN(amount))) { ... }
+
+        // Perform the update
+        const updatedLog = await ActivityLog.findByIdAndUpdate(logId, updateData, {
+            new: true,
+            runValidators: true, // Mongoose validation still useful for schema level rules
+        });
+
+        if (!updatedLog) { // Should be redundant after findById, but safe check
+            return res.status(404).json({ success: false, message: 'Log not found during update' });
+        }
+
+        res.status(200).json({ success: true, data: updatedLog, message: 'Log updated successfully' });
+
+    } catch (error) {
+        console.error('Update Log Error:', error); // Keep console log
+        next(error); // <<< Pass error to the centralized handler
     }
 };

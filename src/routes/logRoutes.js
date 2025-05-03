@@ -1,32 +1,58 @@
 // src/routes/logRoutes.js
-const express = require('express'); // Need Express to create routes
-const router = express.Router(); // Get the router instance from Express
+const express = require('express');
+const router = express.Router();
+const { body, param } = require('express-validator');
 
-// Import the functions that actually handle creating/getting logs
-const { createLog, getLogs } = require('../controllers/logController');
+// Controller functions
+const { createLog, getLogs, getMyLogs, deleteLog,updateLog } = require('../controllers/logController');
 
-// Import our custom middleware for checking login status and roles
+// Middleware
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// --- Apply Authentication Middleware ---
-// IMPORTANT: This line applies the 'protect' middleware to ALL routes defined below in this file.
-// This means a user MUST be logged in (provide a valid JWT) to use any '/api/logs' endpoint.
+// --- Validation Rules for Creating Log --- //
+const createLogValidationRules = [
+    body('category')
+        .trim()
+        .notEmpty().withMessage('Category is required'),
+    body('amount')
+        .notEmpty().withMessage('Amount is required')
+        .isFloat({ min: 0 }).withMessage('Amount must be a non-negative number') // Ensure it's numeric and >= 0
+];
+
+// --- Validation Rules for Updating Log --- //
+const updateLogValidationRules = [
+    param('id') // Check the ID in the URL parameter
+        .isMongoId().withMessage('Invalid Log ID format'),
+    body('category') // Validate category ONLY IF it's provided
+        .optional() // Makes this validation conditional
+        .trim()
+        .notEmpty().withMessage('Category cannot be empty if provided'),
+    body('amount') // Validate amount ONLY IF it's provided
+        .optional()
+        .isFloat({ min: 0 }).withMessage('Amount must be a non-negative number if provided')
+];
+
+// --- Validation Rules for Deleting Log --- //
+const deleteLogValidationRules = [
+    param('id').isMongoId().withMessage('Invalid Log ID format')
+];
+
+// --- Protect all log routes: User must be logged in ---
 router.use(protect);
 
-// --- Define Routes ---
+// --- Log Routes ---
 
-// Handle POST requests to /api/logs
-// Purpose: Let logged-in users add a new activity log.
-router.post('/', createLog);
+// POST /api/logs --> Create a log
+router.post('/', createLogValidationRules, createLog);
 
-// Handle GET requests to /api/logs
-// Purpose: Let users with the 'admin' role fetch all activity logs.
-// Note: 'authorize('admin')' runs *after* 'protect' ensures the user is logged in.
+// GET /api/logs/my-logs --> Get current user's logs
+router.get('/my-logs', getMyLogs);
+
+// GET /api/logs --> Get ALL logs (Admin only)
 router.get('/', authorize('admin'), getLogs);
 
-// (Future routes for updating, deleting, or getting user-specific logs would go here)
-// // Example: GET /api/logs/my-logs --> Get logs for the currently logged-in user
-// router.get('/my-logs', getMyLogs); // This would also be protected by router.use(protect)
+router.put('/:id', updateLogValidationRules, updateLog);
 
-// Make these routes available to our main app.js file
+router.delete('/:id', deleteLogValidationRules, deleteLog);
+
 module.exports = router;
