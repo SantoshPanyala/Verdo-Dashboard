@@ -1,42 +1,38 @@
-// src/controllers/authController.js
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { validationResult } = require('express-validator');
-
-// Handle user registration
-exports.signupUser = async (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        // If errors exist, send back 400 with the error messages
-        const errorMessages = errors.array().map(err => err.msg); // Extract messages
-        return res.status(400).json({
-            success: false,
-            message: errorMessages.join('. ') // Join messages into a single string
-            // Alternatively send the full errors array: errors: errors.array()
-        });
-    }
 
 
-    const { name, email, password } = req.body; // Extract data *after* validation passed
+exports.signupUser = async (req, res) => {
+    // 1. Extract user data from request body
+    const { name, email, password } = req.body;
 
     try {
-        const existingUser = await User.findOne({ email: email.toLowerCase() }); // Use the validated & normalized email
-        if (existingUser) {
+        // 2. Basic Validation
+        if (!name || !email || !password) {
             return res.status(400).json({
                 success: false,
-                message: 'Email address already registered.',
+                message: 'Please provide name, email, and password',
             });
         }
 
-        // Create the new user
+        // 3. Check if user already exists
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'User already exists with this email',
+            });
+        }
+
+        // 4. Create new user in the database
+        // Password hashing happens due to the pre-save hook in User.js
         const newUser = await User.create({
-            name, // Use validated & trimmed name if 'trim()' was used
-            email: email.toLowerCase(), // Use validated & normalized email
-            password, // Use validated password
+            name,
+            email: email.toLowerCase(), // Store email
+            password,
+            // 'role' will default to 'business user' as defined in the schema
         });
 
-        // Send success response
+        // 5. Respond with success (Created)
         res.status(201).json({
             success: true,
             data: {
@@ -51,49 +47,62 @@ exports.signupUser = async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Signup Error:', error); // Keep console log for server debugging
-        next(error); // Pass the error to the centralized handler
+        // 6. Handle potential errors (e.g., database errors)
+        console.error('Signup Error:', error); // Log the error for debugging
+        res.status(500).json({
+            success: false,
+            message: 'Server Error during signup',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        });
     }
 };
 
-// Handle user login
-exports.loginUser = async (req, res, next) => {
-    // --- Check for validation errors from middleware --- // <<< NEW
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        const errorMessages = errors.array().map(err => err.msg);
-        return res.status(400).json({
-            success: false,
-            message: errorMessages.join('. ')
-        });
-    }
-    // --- End validation check ---
 
-    const { email, password } = req.body; // Extract after validation
-
-    // --- This old manual check is NO LONGER NEEDED ---
-    // if (!email || !password) { ... }
+exports.loginUser = async (req, res) => {
+    const { email, password } = req.body;
 
     try {
-        // Find user by email (include password for comparison)
-        const user = await User.findOne({ email: email.toLowerCase() }).select('+password'); // Use validated email
-
-        // Check if user exists and password is correct
-        if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        // 1. Basic Validation
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide email and password',
+            });
         }
 
-        // User is valid, prepare JWT payload
-        const payload = { id: user._id, role: user.role };
+        // 2. Find user by email
+        const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
 
-        // Sign the JWT
-        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE });
+        // 3. If user not found or password doesn't match
+        if (!user || !(await user.matchPassword(password))) {
+            return res.status(401).json({ // 401 Unauthorized
+                success: false,
+                message: 'Invalid email or password',
+            });
+        }
 
-        // Send token to client
-        res.status(200).json({ success: true, token: token, message: 'Login successful' });
+        // 4. Generate JWT
+        const token = user.getSignedJwtToken();
+
+        // 5. Respond with token and user data (excluding password)
+        res.status(200).json({
+            success: true,
+            token,
+            data: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            },
+            message: 'User logged in successfully',
+        });
 
     } catch (error) {
-        console.error('Signup Error:', error); // Keep console log for server debugging
-        next(error); // Pass the error to the centralized handler
+        console.error('Login Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server Error during login',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        });
     }
 };

@@ -1,7 +1,7 @@
 // src/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
-// --- Import validation functions ---
+
 const { body } = require('express-validator');
 
 // Import controller functions
@@ -38,9 +38,9 @@ const loginValidationRules = [
 // --- Define Routes ---
 
 // POST /api/auth/signup - Apply validation rules before controller
-router.post('/signup', signupValidationRules, signupUser); // <<< Rules added here
+router.post('/signup', signupUser);
 
 // POST /api/auth/login (Validation to be added later)
-router.post('/login', loginValidationRules, loginUser);
+router.post('/login', loginUser);
 
 module.exports = router;
