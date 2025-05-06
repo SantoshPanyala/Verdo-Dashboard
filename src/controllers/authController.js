@@ -1,38 +1,38 @@
+
 const User = require('../models/User');
+const { validationResult } = require('express-validator'); // 👈 --- ADD THIS LINE ---
 
+exports.signupUser = async (req, res, next) => { // 👈 --- ADD next ---
+    // --- ADD THIS BLOCK --- 👇
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        // Collect all error messages
+        const errorMessages = errors.array().map(err => err.msg);
+        return res.status(400).json({
+            success: false,
+            // Join messages or send the array, depending on preference
+            message: errorMessages.join('. ')
+        });
+    }
 
-exports.signupUser = async (req, res) => {
-    // 1. Extract user data from request body
     const { name, email, password } = req.body;
 
     try {
-        // 2. Basic Validation
-        if (!name || !email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Please provide name, email, and password',
-            });
-        }
 
-        // 3. Check if user already exists
         const existingUser = await User.findOne({ email: email.toLowerCase() });
         if (existingUser) {
-            return res.status(400).json({
+            return res.status(400).json({ // Consider if this should be a 409 Conflict
                 success: false,
                 message: 'User already exists with this email',
             });
         }
 
-        // 4. Create new user in the database
-        // Password hashing happens due to the pre-save hook in User.js
         const newUser = await User.create({
             name,
-            email: email.toLowerCase(), // Store email
+            email: email.toLowerCase(),
             password,
-            // 'role' will default to 'business user' as defined in the schema
         });
 
-        // 5. Respond with success (Created)
         res.status(201).json({
             success: true,
             data: {
@@ -47,44 +47,39 @@ exports.signupUser = async (req, res) => {
         });
 
     } catch (error) {
-        // 6. Handle potential errors (e.g., database errors)
-        console.error('Signup Error:', error); // Log the error for debugging
-        res.status(500).json({
-            success: false,
-            message: 'Server Error during signup',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        });
+        console.error('Signup Error:', error);
+        // Pass the error to the centralized error handler
+        next(error); // 👈 --- MODIFICATION HERE ---
     }
 };
 
+exports.loginUser = async (req, res, next) => { // 👈 --- ADD next ---
+    // --- ADD THIS BLOCK --- 👇
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        const errorMessages = errors.array().map(err => err.msg);
+        return res.status(400).json({
+            success: false,
+            message: errorMessages.join('. ')
+        });
+    }
+    // --- END OF ADDED BLOCK ---
 
-exports.loginUser = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        // 1. Basic Validation
-        if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Please provide email and password',
-            });
-        }
 
-        // 2. Find user by email
         const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
 
-        // 3. If user not found or password doesn't match
         if (!user || !(await user.matchPassword(password))) {
-            return res.status(401).json({ // 401 Unauthorized
+            return res.status(401).json({
                 success: false,
                 message: 'Invalid email or password',
             });
         }
 
-        // 4. Generate JWT
         const token = user.getSignedJwtToken();
 
-        // 5. Respond with token and user data (excluding password)
         res.status(200).json({
             success: true,
             token,
@@ -99,10 +94,7 @@ exports.loginUser = async (req, res) => {
 
     } catch (error) {
         console.error('Login Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server Error during login',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        });
+        // Pass the error to the centralized error handler
+        next(error); //
     }
 };

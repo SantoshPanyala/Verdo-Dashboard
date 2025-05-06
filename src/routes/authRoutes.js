@@ -32,15 +32,17 @@ const loginValidationRules = [
         .isEmail().withMessage('Please provide a valid email address')
         .normalizeEmail(),
     body('password')
-        .notEmpty().withMessage('Password is required')
+        .notEmpty().withMessage('Password is required') // Changed from isLength to notEmpty for login
 ];
 
 // --- Define Routes ---
 
 // POST /api/auth/signup - Apply validation rules before controller
-router.post('/signup', signupUser);
 
-// POST /api/auth/login (Validation to be added later)
-router.post('/login', loginUser);
+router.post('/signup', signupValidationRules, signupUser);
+
+// POST /api/auth/login - Apply validation rules before controller
+
+router.post('/login', loginValidationRules, loginUser);
 
 module.exports = router;
