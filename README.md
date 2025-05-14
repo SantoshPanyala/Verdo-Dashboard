@@ -9,7 +9,7 @@ Hi! This is the backend API for Verdo, a project designed to help users and busi
 **How it Works (The Basics):**
 * Users can sign up and log in (gotta keep things secure!).
 * Once logged in, they can post a new "activity log" (e.g., "Saved 2kg of CO₂ by using public transport").
-* Users can also see and manage *their own* logs.
+* Users can also see and manage *their own* logs(audit information).
 * There's a special role for "admin" users who can see *all* the logs submitted by everyone, and help manage them if needed.
 * It's all about secure and organized data, with input checks to make sure things are sensible!
 
