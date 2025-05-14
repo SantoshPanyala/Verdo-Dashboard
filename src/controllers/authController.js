@@ -1,9 +1,8 @@
 
 const User = require('../models/User');
-const { validationResult } = require('express-validator'); // 👈 --- ADD THIS LINE ---
+const { validationResult } = require('express-validator');
 
-exports.signupUser = async (req, res, next) => { // 👈 --- ADD next ---
-    // --- ADD THIS BLOCK --- 👇
+exports.signupUser = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         // Collect all error messages
@@ -49,12 +48,11 @@ exports.signupUser = async (req, res, next) => { // 👈 --- ADD next ---
     } catch (error) {
         console.error('Signup Error:', error);
         // Pass the error to the centralized error handler
-        next(error); // 👈 --- MODIFICATION HERE ---
+        next(error);
     }
 };
 
-exports.loginUser = async (req, res, next) => { // 👈 --- ADD next ---
-    // --- ADD THIS BLOCK --- 👇
+exports.loginUser = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         const errorMessages = errors.array().map(err => err.msg);

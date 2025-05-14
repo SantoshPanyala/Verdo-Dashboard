@@ -1,12 +1,12 @@
 // src/middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
-const User = require('../models/User'); // Need User model to find user from token payload
+const User = require('../models/User');
 
 // Middleware to protect routes
 exports.protect = async (req, res, next) => {
     let token;
 
-    // Check if token exists in headers (Authorization: Bearer TOKEN)
+    // Authorization: Bearer TOKEN
     if (
         req.headers.authorization &&
         req.headers.authorization.startsWith('Bearer')
